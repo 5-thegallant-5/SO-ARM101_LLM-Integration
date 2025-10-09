@@ -36,46 +36,54 @@ STS_ID                      = 5                 # STServo ID : 1
 BAUDRATE                    = 1000000           # STServo default baudrate : 1000000
 DEVICENAME                  = '/dev/tty.usbmodem58FA0924721'    # Check which port is being used on your controller
                                                 # ex) Windows: "COM1"   Linux: "/dev/ttyUSB0" Mac: "/dev/tty.usbserial-*"
+def connect():
+    # Initialize PortHandler instance
+    # Set the port path
+    # Get methods and members of PortHandlerLinux or PortHandlerWindows
+    portHandler = PortHandler(DEVICENAME)
 
-# Initialize PortHandler instance
-# Set the port path
-# Get methods and members of PortHandlerLinux or PortHandlerWindows
-portHandler = PortHandler(DEVICENAME)
-
-# Initialize PacketHandler instance
-# Get methods and members of Protocol
-packetHandler = sts(portHandler)
+    # Initialize PacketHandler instance
+    # Get methods and members of Protocol
+    packetHandler = sts(portHandler)
     
-# Open port
-if portHandler.openPort():
-    print("Succeeded to open the port")
-else:
-    print("Failed to open the port")
-    print("Press any key to terminate...")
-    getch()
-    quit()
+    if portHandler.openPort():
+        print("Succeeded to open the port")
+    else:
+        print("Failed to open the port")
+        print("Press any key to terminate...")
+        getch()
+        quit()
 
-# Set port baudrate
-if portHandler.setBaudRate(BAUDRATE):
-    print("Succeeded to change the baudrate")
-else:
-    print("Failed to change the baudrate")
-    print("Press any key to terminate...")
-    getch()
-    quit()
+    # Set port baudrate
+    if portHandler.setBaudRate(BAUDRATE):
+        print("Succeeded to change the baudrate")
+    else:
+        print("Failed to change the baudrate")
+        print("Press any key to terminate...")
+        getch()
+        quit() 
+    
+    return (portHandler, packetHandler)
+
+
+portHandler, packetHandler = connect()
 
 for i in range(10000):
     print("State:")
+    groupSyncRead = GroupSyncRead(packetHandler, STS_PRESENT_POSITION_L, 4)
     for i in range(0, 7, 1):
         try:
             pos = packetHandler.ReadPos(i)
             print(f"Servo {i}:", pos)
         except:
             print(f"Servo {i}: Fail")
+            _, packetHandler = connect()
     print("===============\n\n")
     time.sleep(0.5)
     
-    
+
+
+
 
 # while 1:
 #     print("Press any key to continue! (or press ESC to quit!)")
