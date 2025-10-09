@@ -75,9 +75,12 @@ def log_servo_positions(filename: str, packetHandler):
                     pos = packetHandler.ReadPos(servoId)
                     # For all ACTUAL servos
                     if servoId > 0:
-                        # Add the values to the list
-                        angle_values.append(str(pos))
-                        print(f"Servo {servoId}:", pos)
+                        if  pos[1] == 0:
+                            # Add the values to the list
+                            angle_values.append(str(pos[0]))
+                            print(f"Servo {servoId}:", pos)
+                        else:
+                            angle_values.append("")
                 except:
                     print(f"Servo {servoId}: Fail")
                     angle_values.append("")
@@ -87,7 +90,7 @@ def log_servo_positions(filename: str, packetHandler):
             outputLine = ",".join(angle_values) + "\n"
             file.write(outputLine)
             print("===============\n\n")
-            time.sleep(0.5)
+            time.sleep(0.1)
         # Close file once complete
         file.close()
 
