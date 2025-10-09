@@ -66,23 +66,47 @@ def connect():
     return (portHandler, packetHandler)
 
 
+def log_servo_positions(filename: str, packetHandler):
+    with open(filename, 'a') as file:
+        for i in range(10000):
+            angle_values = []
+            for servoId in range(0, 7, 1):
+                try:
+                    pos = packetHandler.ReadPos(servoId)
+                    # For all ACTUAL servos
+                    if servoId > 0:
+                        # Add the values to the list
+                        angle_values.append(str(pos))
+                        print(f"Servo {servoId}:", pos)
+                except:
+                    print(f"Servo {servoId}: Fail")
+                    angle_values.append("")
+                    _, packetHandler = connect()
+            
+            # Once all motor positions have been measured each, add values to the log file
+            outputLine = ",".join(angle_values) + "\n"
+            file.write(outputLine)
+            print("===============\n\n")
+            time.sleep(0.5)
+        # Close file once complete
+        file.close()
+
 portHandler, packetHandler = connect()
 
-for i in range(10000):
-    print("State:")
-    groupSyncRead = GroupSyncRead(packetHandler, STS_PRESENT_POSITION_L, 4)
-    for i in range(0, 7, 1):
-        try:
-            pos = packetHandler.ReadPos(i)
-            print(f"Servo {i}:", pos)
-        except:
-            print(f"Servo {i}: Fail")
-            _, packetHandler = connect()
-    print("===============\n\n")
-    time.sleep(0.5)
+# for i in range(10000):
+#     print("State:")
+#     for i in range(0, 7, 1):
+#         try:
+#             pos = packetHandler.ReadPos(i)
+#             print(f"Servo {i}:", pos)
+#         except:
+#             print(f"Servo {i}: Fail")
+#             _, packetHandler = connect()
+#     print("===============\n\n")
+#     time.sleep(0.5)
+
+log_servo_positions("servo_positions.log", packetHandler=packetHandler)
     
-
-
 
 
 # while 1:
