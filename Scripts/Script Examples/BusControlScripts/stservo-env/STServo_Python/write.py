@@ -29,33 +29,77 @@
 #
 # sys.path.append("..")
 # from STservo_sdk import *                 # Uses STServo SDK library
+import time
 
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
-from lerobot.teleoperators.so101_leader import SO101LeaderConfig, SO101Leader
-
-# robot_config = SO100FollowerConfig(
-#     port="COM5",
-#     id="1",
-# )
-
-teleop_config = SO101LeaderConfig(
-    port="COM6",
-    id="2",
+from lerobot.teleoperators.so100_leader import SO100LeaderConfig, SO100Leader
+robot_config = SO100FollowerConfig(
+    port="COM5",
+    id="1",
 )
 
-teleop_device = SO101Leader(teleop_config)
-teleop_device.connect()
-# robot = SO100Follower(robot_config)
-# robot.connect()
-print("Robot Connected")
-# print(robot.get_observation())
+# teleop_config = SO100LeaderConfig(
+#     port="COM6",
+#     id="2",
+# )
 
-action = teleop_device.get_action()
-print(action)
-# robot.send_action(action)
-#
-# robot.disconnect()
-teleop_device.disconnect()
+# teleop_device = SO100Leader(teleop_config)
+# teleop_device.connect()
+robot = SO100Follower(robot_config)
+robot.connect()
+print("Robot Connected")
+print(robot.get_observation())
+
+# action = teleop_device.get_action()
+# print(action)
+action = {
+'shoulder_pan.pos': 0,
+'shoulder_lift.pos':0,
+'elbow_flex.pos': 0,
+#'wrist_flex.pos': 0,
+'wrist_roll.pos': 0,
+'gripper.pos': 0
+}
+
+pre_rest = {
+    'shoulder_pan.pos': -0.5032350826743368,
+    'shoulder_lift.pos': -60.932038834951456,
+    'elbow_flex.pos': 61.8659420289855,
+    'wrist_flex.pos': 77.70571544385894,
+    'wrist_roll.pos': 0.024420024420024333,
+    'gripper.pos': 0.5405405405405406
+}
+
+true_rest = {
+    'shoulder_pan.pos': -0.6470165348670065,
+    'shoulder_lift.pos': -88.73786407766991,
+    'elbow_flex.pos': 99.54710144927537,
+    'wrist_flex.pos': 77.70571544385894,
+    'wrist_roll.pos': 0.024420024420024333,
+    'gripper.pos': 0.5405405405405406
+}
+
+robot.send_action(action)
+
+time.sleep(1)
+
+move_pos = input("")
+
+print(robot.get_observation())
+
+move_pos = input("")
+
+robot.send_action(pre_rest)
+
+time.sleep(3)
+
+robot.send_action(true_rest)
+
+time.sleep(3)
+
+robot.disconnect()
+
+# teleop_device.disconnect()
 
 # # Default setting
 # STS_ID                      = 1                 # STServo ID : 1
