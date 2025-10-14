@@ -117,6 +117,7 @@ def setup_robot():
     robot_config = SO100FollowerConfig(
         port=CONFIG_VARS['device_port'],
         id="1",
+        calibration_dir="./config_files/"
     )
     robot = SO100Follower(robot_config)
     robot.connect()
