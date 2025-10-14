@@ -31,16 +31,17 @@ def main():
     input() # Wait
 
     # Get current position
-    print(robot.get_observation()) 
+    print(robot.get_observation())
     input() # Wait
-        
+
 
 def robot_rest(robot: SO100Follower):
     """
-    robot_rest() - Rest position for robot.
+    Rest position for robot.
         - Brings the robot to a safe initial position
         - Lowers into a true rest position 
     """
+    
     pre_rest = {
         "shoulder_pan.pos": -0.5032350826743368,
         "shoulder_lift.pos": -60.932038834951456,
@@ -113,16 +114,21 @@ def get_config():
 
 
 
-def setup_robot():
+def setup_robot(torque: bool  = True):
     """
     Create connection to the SO-ARM100
     """
+    
     # Set robot config
+
+    # Need rigid?
     robot_config = SO100FollowerConfig(
         port=CONFIG_VARS['device_port'],
         id="robot",
-        calibration_dir=Path("./config_files/arm_calibration/")
+        calibration_dir=Path("./config_files/arm_calibration/"),
+        torque=torque
     )
+    
     robot = SO100Follower(robot_config)
     robot.connect()
     print("Robot Connected")
@@ -169,7 +175,7 @@ if __name__ == "__main__":
     get_config()
     
     # Set robot config
-    robot, r_config = setup_robot()
+    robot, r_config = setup_robot(torque=False)
 
     # Run main script    
     main()

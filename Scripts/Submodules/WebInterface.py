@@ -53,7 +53,7 @@ def index():
             <div id="sliders">
                 {% for i in range(1, 7) %}
                 <div class="slider-container">
-                    <label for="slider{{ i }}">Slider {{ i }} (−90 to 90): <span class="value" id="value{{ i }}">0</span></label>
+                    <label for="slider{{ i }}">Motor {{ i }} (-90 to 90): <span class="value" id="value{{ i }}">0</span></label>
                     <input type="range" id="slider{{ i }}" min="-90" max="90" value="0" />
                 </div>
                 {% endfor %}
