@@ -13,7 +13,8 @@ CONFIG_VARS = {
 
 
 def main():
-    start_web_interface(robot.send_action, robot.get_observation())
+    pos = robot.get_observation()
+    # start_web_interface(robot.send_action, pos)
     input() # Wait
 
 
@@ -103,6 +104,7 @@ def setup_robot(torque: bool  = True):
     
     # Set robot config
     robot_config = SO100FollowerConfig(
+        # Get port from config variables
         port=CONFIG_VARS['device_port'],
         id="robot",
         calibration_dir=Path("./config_files/arm_calibration/"),
