@@ -120,18 +120,19 @@ def setup_robot(torque: bool  = True):
     """
     
     # Set robot config
-
-    # Need rigid?
     robot_config = SO100FollowerConfig(
         port=CONFIG_VARS['device_port'],
         id="robot",
         calibration_dir=Path("./config_files/arm_calibration/"),
-        torque=torque
     )
     
     robot = SO100Follower(robot_config)
     robot.connect()
     print("Robot Connected")
+    
+    # Check if torque needs to be disabled
+    if not torque:
+        robot.bus.disable_torque()
     
     return (robot, robot_config)
 
