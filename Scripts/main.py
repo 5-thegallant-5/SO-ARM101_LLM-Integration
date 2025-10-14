@@ -79,7 +79,7 @@ def get_config():
     print("Loading config")    
     
     # Check for config file
-    if not os.path.exists("./config.yaml"):
+    if not os.path.exists("./config_files/config.yaml"):
         print("No config.yaml file found - creating new file.")
         with open("./config_files/config.yaml", mode="w") as file:
             yaml.safe_dump(CONFIG_VARS, file)
@@ -87,8 +87,8 @@ def get_config():
     
     # Try to load config file
     try:
-        with open("./config_files/config.yaml", mode="r+") as f:
-            config = yaml.safe_load(f)
+        with open("./config_files/config.yaml", mode="r+") as file:
+            config = yaml.safe_load(file)
             
             # Case where device port is an empty string in the YAML file:
             if config["device_port"] == "":
@@ -98,12 +98,15 @@ def get_config():
                 # Save the result into the file
                 file.seek(0)
                 yaml.safe_dump(CONFIG_VARS, file)
-                file.close()
+                
             
             # Case where device port is in the YAML file: 
             else:
                 CONFIG_VARS["device_port"] = config["device_port"]
                 print(f"Using port {CONFIG_VARS['device_port']} from config.yaml.")
+
+            # Close config.yaml
+            file.close()
                 
     except Exception as e:
         print("ERROR:", e)
@@ -135,6 +138,7 @@ def find_port():
     """
     
     print("\nPlease ensure the robot is connected via USB cable. Once done, press Enter.")
+    input()
     print("Finding all available ports for the MotorsBus.")
     ports_before = fp.find_available_ports()
     print("Ports registered. Remove the USB cable from your MotorsBus and press Enter when done.")
