@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flask Sliders</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2em;
+        }
+
+        .slider-container {
+            margin-bottom: 1.5em;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5em;
+            font-weight: bold;
+        }
+
+        input[type=range] {
+            width: 100%;
+        }
+
+        .value {
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Adjust the sliders</h1>
+    <div id="sliders">
+        <!-- Motor 1 -->
+        <div class="slider-container">
+            <label for="slider1">Motor 1 (-90 to 90): <span class="value" id="value1">{{ current_positions['shoulder_pan.pos'] }}</span></label>
+            <input type="range" id="slider1" min="-90" max="90" value="{{ current_positions['shoulder_pan.pos'] }}" />
+        </div>
+
+        <!-- Motor 2 -->
+        <div class="slider-container">
+            <label for="slider2">Motor 2 (-90 to 90): <span class="value" id="value2">{{ current_positions['shoulder_lift.pos'] }}</span></label>
+            <input type="range" id="slider2" min="-90" max="90" value="{{ current_positions['shoulder_lift.pos'] }}" />
+        </div>
+        
+        <!-- Motor 3 -->
+         <div class="slider-container">
+            <label for="slider3">Motor 3 (-90 to 90): <span class="value" id="value3">{{ current_positions['elbow_flex.pos'] }}</span></label>
+            <input type="range" id="slider3" min="-90" max="90" value="{{ current_positions['elbow_flex.pos'] }}" />
+        </div>
+
+        <!-- Motor 4 -->
+         <div class="slider-container">
+            <label for="slider4">Motor 4 (-90 to 90): <span class="value" id="value4">{{ current_positions['wrist_flex.pos'] }}</span></label>
+            <input type="range" id="slider4" min="-90" max="90" value="{{ current_positions['wrist_flex.pos'] }}" />
+        </div>
+
+        <!-- Motor 5 -->
+         <div class="slider-container">
+            <label for="slider5">Motor 5 (-90 to 90): <span class="value" id="value5">{{ current_positions['wrist_roll.pos'] }}</span></label>
+            <input type="range" id="slider5" min="-90" max="90" value="{{ current_positions['wrist_roll.pos'] }}" />
+        </div>
+
+        <!-- Motor 6 -->
+         <div class="slider-container">
+            <label for="slider6">Motor 6 (0 to 100): <span class="value" id="value6">{{ current_positions['gripper.pos'] }}</span></label>
+            <input type="range" id="slider6" min="0" max="100" value="{{ current_positions['gripper.pos'] }}" />
+        </div>
+    </div>
+    <script>
+        // Function to collect current slider values into an object
+        function collectValues() {            
+            const slider1 = document.getElementById('slider1');
+            const slider2 = document.getElementById('slider2');
+            const slider3 = document.getElementById('slider3');
+            const slider4 = document.getElementById('slider4');
+            const slider5 = document.getElementById('slider5');
+            const slider6 = document.getElementById('slider6');
+
+            const values = {
+                "shoulder_pan.pos": Number(slider1.value),
+                "shoulder_lift.pos": Number(slider2.value),
+                "elbow_flex.pos": Number(slider3.value),
+                'wrist_flex.pos': Number(slider4.value),
+                "wrist_roll.pos": Number(slider5.value),
+                "gripper.pos": Number(slider6.value),
+            };
+
+            return values;
+        }
+
+        // Function to update text next to sliders showing current value
+        function updateValueDisplays() {
+            for (let i = 1; i <= 6; i++) {
+                const valSpan = document.getElementById('value' + i);
+                const slider = document.getElementById('slider' + i);
+                valSpan.textContent = slider.value;
+            }
+        }
+
+        // Function to send slider values to the server
+        function sendUpdate() {
+            const values = collectValues();
+            fetch('/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(values)
+            }).then(response => {
+                // Optionally handle response here; we just ignore it.
+            });
+        }
+
+        // Attach input event listeners to all sliders
+        document.querySelectorAll('input[type=range]').forEach(slider => {
+            slider.addEventListener('input', () => {
+                updateValueDisplays();
+                sendUpdate();
+            });
+        });
+
+        // Initialize value displays on first load
+        updateValueDisplays();
+    </script>
+</body>
+
+</html>

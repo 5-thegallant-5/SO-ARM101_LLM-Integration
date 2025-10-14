@@ -13,25 +13,7 @@ CONFIG_VARS = {
 
 
 def main():
-    # Get current position
-    print(robot.get_observation())
-
-    # Determine angles for the robot to assume
-    action = {
-        "shoulder_pan.pos": 0,
-        "shoulder_lift.pos": 0,
-        "elbow_flex.pos": 0,
-        'wrist_flex.pos': 0,
-        "wrist_roll.pos": 0,
-        "gripper.pos": 0,
-    }
-
-    # Set robot to the zero position
-    robot.send_action(action)
-    input() # Wait
-
-    # Get current position
-    print(robot.get_observation())
+    start_web_interface(robot.send_action, robot.get_observation)
     input() # Wait
 
 
@@ -180,7 +162,7 @@ if __name__ == "__main__":
     get_config()
     
     # Set robot config
-    robot, r_config = setup_robot(torque=False)
+    robot, r_config = setup_robot()
 
     # Run main script    
     main()
