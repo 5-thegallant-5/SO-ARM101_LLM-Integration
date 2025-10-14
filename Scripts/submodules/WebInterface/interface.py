@@ -6,5 +6,3 @@ def create_app(onUpdate = None, current_positions = None):
     register_routes(app, onUpdate, current_positions)
 
     return app
-
-app = create_app()

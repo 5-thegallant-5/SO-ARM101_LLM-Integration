@@ -4,7 +4,7 @@ import os
 import yaml
 from pathlib import Path
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
-from submodules.WebInterface.interface import app
+from submodules.WebInterface.interface import create_app
 
 
 CONFIG_VARS = {
@@ -13,7 +13,7 @@ CONFIG_VARS = {
 
 
 def main():
-    start_web_interface(robot.send_action, robot.get_observation)
+    start_web_interface(robot.send_action, robot.get_observation())
     input() # Wait
 
 
@@ -153,7 +153,8 @@ def find_port():
         )
 
 
-def start_web_interface():
+def start_web_interface(onUpdate, current_pos):
+    app = create_app(onUpdate=onUpdate, current_positions=current_pos)
     app.run(debug=True)
     
 
