@@ -14,9 +14,13 @@ CONFIG_VARS = {
 
 def main():
     pos = robot.get_observation()
-    # start_web_interface(robot.send_action, pos)
+    start_web_interface(send_action_callback, pos)
     input() # Wait
 
+
+def send_action_callback(positions):
+    robot.send_action(positions)
+    
 
 def robot_rest(robot: SO100Follower):
     """
