@@ -14,7 +14,8 @@ CONFIG_VARS = {
 
 def main():
     pos = robot.get_observation()
-    start_web_interface(send_action_callback, pos)
+    app = start_web_interface(send_action_callback, pos)
+    app.run()
     input() # Wait
 
 
@@ -161,7 +162,7 @@ def find_port():
 
 def start_web_interface(onUpdate, current_pos):
     app = create_app(onUpdate=onUpdate, current_positions=current_pos)
-    app.run(debug=True)
+    return app
     
 
 if __name__ == "__main__":
