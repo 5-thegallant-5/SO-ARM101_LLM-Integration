@@ -2,6 +2,7 @@ import lerobot.find_port as fp
 import time
 import os
 import yaml
+from pathlib import Path
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
 # from lerobot.teleoperators.so100_leader import SO100LeaderConfig, SO100Leader
 
@@ -117,7 +118,7 @@ def setup_robot():
     robot_config = SO100FollowerConfig(
         port=CONFIG_VARS['device_port'],
         id="robot",
-        calibration_dir="./config_files/arm_calibration/"
+        calibration_dir=Path("./config_files/arm_calibration/")
     )
     robot = SO100Follower(robot_config)
     robot.connect()
