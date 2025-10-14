@@ -3,7 +3,7 @@ from flask import render_template, request, jsonify
 def register_routes(app, onUpdate, current_positions):
     @app.route("/")
     def index():
-        return render_template("index.html", context=current_positions)
+        return render_template("index.html", current_positions=current_positions)
 
     @app.route("/update", methods=["POST"])
     def update():
