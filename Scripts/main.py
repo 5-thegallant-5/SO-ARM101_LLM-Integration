@@ -32,16 +32,14 @@ def main():
     # Get current position
     print(robot.get_observation()) 
     input() # Wait
-    
-    robot_rest(robot)
+        
 
-
-"""
-robot_rest() - Rest position for robot.
-    - Brings the robot to a safe initial position
-    - Lowers into a true rest position 
-"""
 def robot_rest(robot: SO100Follower):
+    """
+    robot_rest() - Rest position for robot.
+        - Brings the robot to a safe initial position
+        - Lowers into a true rest position 
+    """
     pre_rest = {
         "shoulder_pan.pos": -0.5032350826743368,
         "shoulder_lift.pos": -60.932038834951456,
@@ -66,17 +64,18 @@ def robot_rest(robot: SO100Follower):
     time.sleep(3)
 
 
-
-"""
-get_config() - Config handler:
-    - Checks if there is an existing config file
-    - Creates a config file if none exists
-    - Attempts to load file
-    - If port does not exist in file, automatically scans and retrieves the port
-    - Sets global var device_port to the correct port, before saving into file
-"""
 def get_config():
+    """
+    Config handler:
+        - Checks if there is an existing config file
+        - Creates a config file if none exists
+        - Attempts to load file
+        - If port does not exist in file, automatically scans and retrieves the port
+        - Sets global var device_port to the correct port, before saving into file
+    """
     global CONFIG_VARS
+    
+    print("Loading config")    
     
     # Check for config file
     if not os.path.exists("./config.yaml"):
@@ -109,10 +108,11 @@ def get_config():
         print("ERROR:", e)
 
 
-"""
-setup_robot() - Create connection to the SO-ARM100
-"""
+
 def setup_robot():
+    """
+    Create connection to the SO-ARM100
+    """
     # Set robot config
     robot_config = SO100FollowerConfig(
         port=CONFIG_VARS['device_port'],
@@ -125,10 +125,13 @@ def setup_robot():
     return (robot, robot_config)
 
 
-"""
-find_port() - Find USB port of robot and set global device_port variable - modified from find_port.py
-"""
+
 def find_port():
+    """
+    Find USB port of robot and set global device_port variable.
+    Modified from find_port.py from LeRobot library
+    """
+    
     print("\nPlease ensure the robot is connected via USB cable. Once done, press Enter.")
     print("Finding all available ports for the MotorsBus.")
     ports_before = fp.find_available_ports()
@@ -157,7 +160,6 @@ def find_port():
 
 if __name__ == "__main__":
     # Load config file
-    print("Loading config")
     get_config()
     
     # Set robot config
