@@ -1,56 +1,153 @@
-from lerobot import find_port as fp
+import lerobot.find_port as fp
 import time
 import os
 import yaml
+from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
+# from lerobot.teleoperators.so100_leader import SO100LeaderConfig, SO100Leader
+
+
+CONFIG_VARS = {
+    "device_port": ""
+}
+
 
 def main():
-    print("Hello from so-arm101-llm-integration!")
+    
+    # Set robot config
+    robot_config = SO100FollowerConfig(
+        port=CONFIG_VARS['device_port'],
+        id="1",
+    )
+    robot = SO100Follower(robot_config)
+    robot.connect()
+    print("Robot Connected")
+    
+    # Get current position
+    print(robot.get_observation())
+
+    # Determine angles for the robot to assume
+    action = {
+        "shoulder_pan.pos": 0,
+        "shoulder_lift.pos": 0,
+        "elbow_flex.pos": 0,
+        'wrist_flex.pos': 0,
+        "wrist_roll.pos": 0,
+        "gripper.pos": 0,
+    }
+
+    # Set robot to the zero position
+    robot.send_action(action)
+    input() # Wait
+
+    # Get current position
+    print(robot.get_observation()) 
+    input() # Wait
+    
+    robot_rest(robot)
+
+
+def robot_rest(robot: SO100Follower):
+    pre_rest = {
+        "shoulder_pan.pos": -0.5032350826743368,
+        "shoulder_lift.pos": -60.932038834951456,
+        "elbow_flex.pos": 61.8659420289855,
+        "wrist_flex.pos": 77.70571544385894,
+        "wrist_roll.pos": 0.024420024420024333,
+        "gripper.pos": 0.5405405405405406,
+    }
+
+    true_rest = {
+        "shoulder_pan.pos": -0.6470165348670065,
+        "shoulder_lift.pos": -88.73786407766991,
+        "elbow_flex.pos": 99.54710144927537,
+        "wrist_flex.pos": 77.70571544385894,
+        "wrist_roll.pos": 0.024420024420024333,
+        "gripper.pos": 0.5405405405405406,
+    }
+    
+    robot.send_action(pre_rest)
+    time.sleep(3)
+    robot.send_action(true_rest)
+    time.sleep(3)
+    robot.disconnect()
+
+
+
+    """
+    get_config() - Config handler:
+        - Checks if there is an existing config file
+        - Creates a config file if none exists
+        - Attempts to load file
+        - If port does not exist in file, automatically scans and retrieves the port
+        - Sets global var device_port to the correct port, before saving into file
+    """
+def get_config():
+    global CONFIG_VARS
     
     # Check for config file
-    
+    if not os.path.exists("./config.yaml"):
+        print("No config.yaml file found - creating new file.")
+        with open("./config_files/config.yaml", mode="w") as file:
+            yaml.safe_dump(CONFIG_VARS, file)
+            file.close()
     
     # Try to load config file
     try:
-        with open("./config.yaml") as f:
+        with open("./config_files/config.yaml", mode="r+") as f:
             config = yaml.safe_load(f)
-            if config["device_port"] == "":
-                pass
-            else:
-                pass
             
-    except:
-        pass
-    print(config)
-    
+            # Case where device port is an empty string in the YAML file:
+            if config["device_port"] == "":
+                print("Parameter 'device_port' is empty in 'config.yaml'. Starting port configuration...")
+                CONFIG_VARS["device_port"] = find_port()
+                
+                # Save the result into the file
+                file.seek(0)
+                yaml.safe_dump(CONFIG_VARS, file)
+                file.close()
+            
+            # Case where device port is in the YAML file: 
+            else:
+                CONFIG_VARS["device_port"] = config["device_port"]
+                print(f"Using port {CONFIG_VARS['device_port']} from config.yaml.")
+                
+    except Exception as e:
+        print("ERROR:", e)
 
-'''
-Find USB port of robot and set global USB variable - modified from find_port.py
-'''
+
+    """
+    find_port() - Find USB port of robot and set global device_port variable - modified from find_port.py
+    """
 def find_port():
-    print("Finding all available ports for the MotorsBus.")
+    print("\nFinding all available ports for the MotorsBus.")
     ports_before = fp.find_available_ports()
-    print("Ports before disconnecting:", ports_before)
-
-    print("Remove the USB cable from your MotorsBus and press Enter when done.")
+    print("Ports registered. Remove the USB cable from your MotorsBus and press Enter when done.")
     input()  # Wait for user to disconnect the device
 
     time.sleep(0.5)  # Allow some time for port to be released
-    ports_after = find_port.find_available_ports()
+    ports_after = fp.find_available_ports()
     ports_diff = list(set(ports_before) - set(ports_after))
 
     if len(ports_diff) == 1:
         port = ports_diff[0]
         print(f"The port of this MotorsBus is '{port}'")
-        print("Reconnect the USB cable and press enter")
-        input()
+        print("Reconnect the USB cable and press Enter.")
+        input() # Wait for the user to reconnect the device
         return port
     elif len(ports_diff) == 0:
-        raise OSError(f"Could not detect the port. No difference was found ({ports_diff}).")
+        raise OSError(
+            f"Could not detect the port. No difference was found ({ports_diff})."
+        )
     else:
-        raise OSError(f"Could not detect the port. More than one port was found ({ports_diff}).")
-    
-    
+        raise OSError(
+            f"Could not detect the port. More than one port was found ({ports_diff})."
+        )
 
 
 if __name__ == "__main__":
+    # Load config file
+    print("Loading config")
+    get_config()
+
+    # Run main script    
     main()
