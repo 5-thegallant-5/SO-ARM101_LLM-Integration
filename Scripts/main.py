@@ -4,7 +4,7 @@ import os
 import yaml
 from pathlib import Path
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
-from submodules.WebInterface.interface import app
+from submodules.WebInterface.interface import create_app
 
 
 CONFIG_VARS = {
@@ -13,6 +13,9 @@ CONFIG_VARS = {
 
 
 def main():
+    # pos = robot.get_observation()
+    # app = start_web_interface(send_action_callback, pos)
+    # app.run()
     # Get current position
     print(robot.get_observation())
 
@@ -34,6 +37,10 @@ def main():
     print(robot.get_observation())
     input() # Wait
 
+
+def send_action_callback(positions):
+    robot.send_action(positions)
+    
 
 def robot_rest(robot: SO100Follower):
     """
@@ -121,6 +128,7 @@ def setup_robot(torque: bool  = True):
     
     # Set robot config
     robot_config = SO100FollowerConfig(
+        # Get port from config variables
         port=CONFIG_VARS['device_port'],
         id="robot",
         calibration_dir=Path("./config_files/arm_calibration/"),
@@ -171,9 +179,11 @@ def find_port():
         )
 
 
-def start_web_interface():
-    app.run(debug=True)
-    
+def start_web_interface(onUpdate, current_pos):
+    app = create_app(onUpdate=onUpdate, current_positions=current_pos)
+    return app
+
+
 
 if __name__ == "__main__":
     # Load config file

@@ -163,7 +163,7 @@ def find_port():
 def start_web_interface(onUpdate, current_pos):
     app = create_app(onUpdate=onUpdate, current_positions=current_pos)
     return app
-    
+ 
 
 if __name__ == "__main__":
     # Load config file
