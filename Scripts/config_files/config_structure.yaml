@@ -1,0 +1,5 @@
+parameters:
+  - device_port:
+    name: device_port
+    type: string
+    nullable: true
