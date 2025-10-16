@@ -51,16 +51,31 @@ def main() -> None:
     robot = SO100Follower(cfg)
     robot.connect()
 
-    # Background stepping thread for smoother sim
+    # Background stepping thread for smoother sim and single-threaded PyBullet access
     stop_evt = threading.Event()
+    action_lock = threading.Lock()
+    latest_action: Dict[str, float] = robot.get_observation().copy()
+    last_applied: Dict[str, float] | None = None
 
     def _step_loop():
+        nonlocal last_applied
         while not stop_evt.is_set():
             try:
-                if robot.sim is not None:
-                    robot.sim.step(sleep=True)
-                else:
+                if robot.sim is None:
                     time.sleep(1.0 / 240.0)
+                    continue
+
+                # Snapshot latest desired action
+                with action_lock:
+                    pending = dict(latest_action)
+
+                if last_applied is None or pending != last_applied:
+                    # Apply new targets (send_action also advances one step)
+                    robot.send_action(pending)
+                    last_applied = pending
+                else:
+                    # No change; advance physics
+                    robot.sim.step(sleep=True)
             except Exception:
                 # Keep stepping even if occasional errors occur
                 time.sleep(1.0 / 240.0)
@@ -84,7 +99,10 @@ def main() -> None:
     # Callback to receive slider updates from the UI
     def on_update(values: Dict[str, float]):
         # Values are already numeric from the UI; interpreted as degrees
-        robot.send_action(values)
+        # Store for the step thread to apply (avoids multi-threaded PyBullet calls)
+        nonlocal latest_action
+        with action_lock:
+            latest_action = dict(values)
 
     # Import and start the Flask app
     create_app = _load_web_interface_create_app()
@@ -106,4 +124,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
