@@ -4,7 +4,6 @@ import os
 import yaml
 from pathlib import Path
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
-from submodules.WebInterface.interface import create_app
 
 
 CONFIG_VARS = {
@@ -37,9 +36,6 @@ def main():
     print(robot.get_observation())
     input() # Wait
 
-
-def send_action_callback(positions):
-    robot.send_action(positions)
     
 
 def robot_rest(robot: SO100Follower):
@@ -178,10 +174,6 @@ def find_port():
             f"Could not detect the port. More than one port was found ({ports_diff})."
         )
 
-
-def start_web_interface(onUpdate, current_pos):
-    app = create_app(onUpdate=onUpdate, current_positions=current_pos)
-    return app
 
 
 
