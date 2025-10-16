@@ -1,195 +1,173 @@
-import lerobot.find_port as fp
-import time
+"""
+Standalone simulator that exposes a `robot` object compatible with
+`robot.send_action({...})` and `robot.get_observation()` used across the repo.
+
+You can either import this module and use `robot` directly, or run it as a
+script to open the GUI and step the simulation.
+
+Import usage:
+    from simulation import robot, send_action
+    robot.send_action({"shoulder_pan.pos": 0, ...})
+
+Interactive CLI (multithreaded):
+    python simulation.py                   # GUI by default
+    SO100_SIM_GUI=0 python simulation.py   # headless
+  - Commands while running (type and press Enter):
+    * set shoulder_pan=10 elbow_flex=-20 wrist_roll=5
+    * set shoulder_pan 10 shoulder_lift -5 gripper 30
+    * obs    (print current observation)
+    * zero   (center arm joints)
+    * quit   (exit)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
 import os
-import yaml
-from pathlib import Path
-from submodules.simulation.so100_follower_sim import SO100Follower, SO100FollowerConfig
-from submodules.WebInterface.interface import create_app
+import time
+import threading
+from typing import Dict, Tuple
+
+from submodules.simulation.so100_follower_sim import SO100FollowerConfig, SO100Follower
 
 
-CONFIG_VARS = {
-    "device_port": ""
-}
+# Create a global, connected robot instance using the simulation backend
+robot_config = SO100FollowerConfig(
+    port="SIM",
+    id="robot",
+    gui=(os.getenv("SO100_SIM_GUI") not in {"0", "false", "False"}),
+)
+robot = SO100Follower(robot_config)
+robot.connect()
 
 
-def main():
-    # pos = robot.get_observation()
-    # app = start_web_interface(send_action_callback, pos)
-    # app.run()
-    # Get current position
-    print(robot.get_observation())
-
-    # Determine angles for the robot to assume
-    action = {
-        "shoulder_pan.pos": 0,
-        "shoulder_lift.pos": 0,
-        "elbow_flex.pos": 0,
-        'wrist_flex.pos': 0,
-        "wrist_roll.pos": 0,
-        "gripper.pos": 0,
-    }
-
-    # Set robot to the zero position
+def send_action(action: Dict[str, float]) -> None:
+    """Convenience passthrough for code that expects a module-level function."""
     robot.send_action(action)
-    input() # Wait
-
-    # Get current position
-    print(robot.get_observation())
-    input() # Wait
-
-    
-
-def robot_rest(robot: SO100Follower):
-    """
-    Rest position for robot.
-        - Brings the robot to a safe initial position
-        - Lowers into a true rest position 
-    """
-    
-    pre_rest = {
-        "shoulder_pan.pos": -0.5032350826743368,
-        "shoulder_lift.pos": -60.932038834951456,
-        "elbow_flex.pos": 61.8659420289855,
-        "wrist_flex.pos": 77.70571544385894,
-        "wrist_roll.pos": 0.024420024420024333,
-        "gripper.pos": 0.5405405405405406,
-    }
-
-    true_rest = {
-        "shoulder_pan.pos": -0.6470165348670065,
-        "shoulder_lift.pos": -88.73786407766991,
-        "elbow_flex.pos": 99.54710144927537,
-        "wrist_flex.pos": 77.70571544385894,
-        "wrist_roll.pos": 0.024420024420024333,
-        "gripper.pos": 0.5405405405405406,
-    }
-    
-    robot.send_action(pre_rest)
-    time.sleep(3)
-    robot.send_action(true_rest)
-    time.sleep(3)
 
 
-def get_config():
-    """
-    Config handler:
-        - Checks if there is an existing config file
-        - Creates a config file if none exists
-        - Attempts to load file
-        - If port does not exist in file, automatically scans and retrieves the port
-        - Sets global var device_port to the correct port, before saving into file
-    """
-    global CONFIG_VARS
-    
-    print("Loading config")    
-    
-    # Check for config file
-    if not os.path.exists("./config_files/config.yaml"):
-        print("No config.yaml file found - creating new file.")
-        with open("./config_files/config.yaml", mode="w") as file:
-            yaml.safe_dump(CONFIG_VARS, file)
-            file.close()
-    
-    # Try to load config file
+def main() -> None:
+    ap = argparse.ArgumentParser(description="SO-ARM100 simulation runner")
+    ap.add_argument("--direct", action="store_true", help="Headless mode (no GUI)")
+    ap.add_argument("--seconds", type=float, default=0, help="Run for N seconds (0: run until Ctrl+C)")
+    args = ap.parse_args()
+
+    if args.direct:
+        os.environ["SO100_SIM_GUI"] = "0"
+
+    # Shared state for interactive updates
+    action_lock = threading.Lock()
+    latest_action: Dict[str, float] = robot.get_observation().copy()
+    last_applied: Dict[str, float] | None = None
+    stop_evt = threading.Event()
+
+    def step_loop():
+        nonlocal last_applied
+        while not stop_evt.is_set():
+            try:
+                if robot.sim is None:
+                    time.sleep(1.0 / 240.0)
+                    continue
+                with action_lock:
+                    pending = dict(latest_action)
+                if last_applied is None or pending != last_applied:
+                    robot.send_action(pending)  # applies and steps once
+                    last_applied = pending
+                else:
+                    robot.sim.step(sleep=True)
+            except Exception:
+                time.sleep(1.0 / 240.0)
+
+    t = threading.Thread(target=step_loop, name="sim-step", daemon=True)
+    t.start()
+
+    def apply_delta(pairs: Dict[str, float]):
+        nonlocal latest_action
+        # normalize keys to include .pos if missing
+        norm: Dict[str, float] = {}
+        for k, v in pairs.items():
+            key = k if k.endswith(".pos") else f"{k}.pos"
+            norm[key] = float(v)
+        with action_lock:
+            latest_action.update(norm)
+
+    def center_arm():
+        # Zero for arm joints means middle due to shim calibration
+        apply_delta({
+            "shoulder_pan": 0,
+            "shoulder_lift": 0,
+            "elbow_flex": 0,
+            "wrist_flex": 0,
+            "wrist_roll": 0,
+        })
+
+    def parse_set_args(tokens: Tuple[str, ...]) -> Dict[str, float]:
+        # Supports key=value pairs or key value pairs
+        out: Dict[str, float] = {}
+        if any("=" in tok for tok in tokens):
+            for tok in tokens:
+                if "=" in tok:
+                    k, v = tok.split("=", 1)
+                    out[k] = float(v)
+        else:
+            if len(tokens) % 2 != 0:
+                print("Expected even number of tokens for 'set': key value [key value]...")
+                return {}
+            it = iter(tokens)
+            for k in it:
+                v = next(it)
+                out[k] = float(v)
+        return out
+
+    print("Interactive simulation running. Type 'help' for commands. Ctrl+C to exit.")
+    start = time.time()
     try:
-        with open("./config_files/config.yaml", mode="r+") as file:
-            config = yaml.safe_load(file)
-            
-            # Case where device port is an empty string in the YAML file:
-            if config["device_port"] == "":
-                print("Parameter 'device_port' is empty in 'config.yaml'. Starting port configuration...")
-                CONFIG_VARS["device_port"] = find_port()
-                
-                # Save the result into the file
-                file.seek(0)
-                yaml.safe_dump(CONFIG_VARS, file)
-                
-            
-            # Case where device port is in the YAML file: 
-            else:
-                CONFIG_VARS["device_port"] = config["device_port"]
-                print(f"Using port {CONFIG_VARS['device_port']} from config.yaml.")
-
-            # Close config.yaml
-            file.close()
-                
-    except Exception as e:
-        print("ERROR:", e)
-
-
-
-def setup_robot(torque: bool  = True):
-    """
-    Create connection to the SO-ARM100
-    """
-    
-    # Set robot config
-    robot_config = SO100FollowerConfig(
-        # Get port from config variables
-        port=CONFIG_VARS['device_port'],
-        id="robot",
-        calibration_dir=Path("./config_files/arm_calibration/"),
-    )
-    
-    robot = SO100Follower(robot_config)
-    robot.connect()
-    print("Robot Connected")
-    
-    # Check if torque needs to be disabled
-    if not torque:
-        robot.bus.disable_torque()
-    
-    return (robot, robot_config)
-
-
-
-def find_port():
-    """
-    Find USB port of robot and set global device_port variable.
-    Modified from find_port.py from LeRobot library
-    """
-    
-    print("\nPlease ensure the robot is connected via USB cable. Once done, press Enter.")
-    input()
-    print("Finding all available ports for the MotorsBus.")
-    ports_before = fp.find_available_ports()
-    print("Ports registered. Remove the USB cable from your MotorsBus and press Enter when done.")
-    input()  # Wait for user to disconnect the device
-
-    time.sleep(0.5)  # Allow some time for port to be released
-    ports_after = fp.find_available_ports()
-    ports_diff = list(set(ports_before) - set(ports_after))
-
-    if len(ports_diff) == 1:
-        port = ports_diff[0]
-        print(f"The port of this MotorsBus is '{port}'")
-        print("Reconnect the USB cable and press Enter.")
-        input() # Wait for the user to reconnect the device
-        return port
-    elif len(ports_diff) == 0:
-        raise OSError(
-            f"Could not detect the port. No difference was found ({ports_diff})."
-        )
-    else:
-        raise OSError(
-            f"Could not detect the port. More than one port was found ({ports_diff})."
-        )
-
-
+        while True:
+            if args.seconds and (time.time() - start) >= args.seconds:
+                break
+            try:
+                line = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not line:
+                continue
+            if line.lower() in {"quit", "exit", "q"}:
+                break
+            if line.lower() in {"help", "h"}:
+                print("Commands:\n  set k=v [k=v...]  or  set k v [k v ...]\n  obs  (print observation)\n  zero (center arm joints)\n  quit")
+                continue
+            if line.lower() in {"obs", "o"}:
+                print(robot.get_observation())
+                continue
+            if line.lower() in {"zero", "center"}:
+                center_arm()
+                continue
+            if line.lower().startswith("json "):
+                try:
+                    payload = json.loads(line[5:])
+                    if isinstance(payload, dict):
+                        apply_delta({str(k): float(v) for k, v in payload.items()})
+                    else:
+                        print("JSON must be an object of key: value pairs")
+                except Exception as e:
+                    print("Invalid JSON:", e)
+                continue
+            if line.lower().startswith("set "):
+                toks = tuple(line.split()[1:])
+                try:
+                    changes = parse_set_args(toks)
+                    if changes:
+                        apply_delta(changes)
+                except Exception as e:
+                    print("Invalid set command:", e)
+                continue
+            print("Unknown command. Type 'help'.")
+    finally:
+        stop_evt.set()
+        t.join(timeout=1.0)
+        robot.disconnect()
 
 
 if __name__ == "__main__":
-    # Load config file
-    # get_config()
-    
-    # Set robot config
-    robot, r_config = setup_robot(torque=False)
-
-    # Run main script    
     main()
-
-    # Set to rest position
-    robot_rest(robot)
-    
-    # Disconnect from arm
-    robot.disconnect()
