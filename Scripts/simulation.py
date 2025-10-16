@@ -32,7 +32,9 @@ from typing import Dict, Tuple
 from submodules.simulation.so100_follower_sim import SO100FollowerConfig, SO100Follower
 
 
-# Create a global, connected robot instance using the simulation backend
+# Create a global, connected robot instance using the simulation backend.
+# The SO100Follower shim now runs a background stepping thread that
+# rate-limits toward desired targets and advances physics at cfg.time_step.
 robot_config = SO100FollowerConfig(
     port="SIM",
     id="robot",
@@ -56,70 +58,14 @@ def main() -> None:
     if args.direct:
         os.environ["SO100_SIM_GUI"] = "0"
 
-    # Shared state for interactive updates
-    action_lock = threading.Lock()
-    latest_action: Dict[str, float] = robot.get_observation().copy()
-    # What we actually apply to the simulator each step (starts at current obs)
-    applied_action: Dict[str, float] = dict(latest_action)
-    stop_evt = threading.Event()
-
-    def step_loop():
-        nonlocal applied_action
-        # Configurable max joint speed in deg/s; defaults to a reasonable rate
-        try:
-            max_deg_per_s = float(os.getenv("SO100_SIM_MAX_SPEED_DEG_S", "120"))
-        except Exception:
-            max_deg_per_s = 120.0
-        # Determine physics timestep (fallback to 1/240s)
-        try:
-            dt = float(getattr(getattr(robot, "sim", None), "time_step", 1.0 / 240.0))
-        except Exception:
-            dt = 1.0 / 240.0
-        max_deg_per_step = max(0.0, max_deg_per_s * dt)
-
-        def _rate_limit(curr: float, target: float, max_step: float) -> float:
-            delta = target - curr
-            if abs(delta) <= max_step:
-                return target
-            return curr + max_step * (1.0 if delta > 0 else -1.0)
-
-        while not stop_evt.is_set():
-            try:
-                if robot.sim is None:
-                    time.sleep(1.0 / 240.0)
-                    continue
-                # Snapshot desired targets
-                with action_lock:
-                    desired = dict(latest_action)
-
-                # Build next applied action by rate-limiting toward desired
-                next_action: Dict[str, float] = dict(applied_action)
-                # Ensure we consider all keys present in either map
-                for key in set(list(applied_action.keys()) + list(desired.keys())):
-                    if not key.endswith(".pos"):
-                        continue
-                    curr = applied_action.get(key, 0.0)
-                    tgt = desired.get(key, curr)
-                    next_action[key] = _rate_limit(curr, tgt, max_deg_per_step)
-
-                applied_action = next_action
-                # Apply and advance physics exactly once per loop
-                robot.send_action(applied_action)
-            except Exception:
-                time.sleep(1.0 / 240.0)
-
-    t = threading.Thread(target=step_loop, name="sim-step", daemon=True)
-    t.start()
-
     def apply_delta(pairs: Dict[str, float]):
-        nonlocal latest_action
         # normalize keys to include .pos if missing
         norm: Dict[str, float] = {}
         for k, v in pairs.items():
             key = k if k.endswith(".pos") else f"{k}.pos"
             norm[key] = float(v)
-        with action_lock:
-            latest_action.update(norm)
+        # The background stepping thread in the shim will consume desired targets
+        robot.send_action(norm)
 
     def center_arm():
         # Zero for arm joints means middle due to shim calibration
@@ -193,8 +139,6 @@ def main() -> None:
                 continue
             print("Unknown command. Type 'help'.")
     finally:
-        stop_evt.set()
-        t.join(timeout=1.0)
         robot.disconnect()
 
 
