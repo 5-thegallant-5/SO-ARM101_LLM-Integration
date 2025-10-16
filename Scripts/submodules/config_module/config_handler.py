@@ -6,6 +6,7 @@ import lerobot.find_port as fp
 # Resolve paths relative to the Scripts directory
 SCRIPTS_DIR = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = SCRIPTS_DIR / "config_files"
+CALIBRATION_DIR = CONFIGS_DIR / "arm_calibration"
 
 CONFIG_STRUCTURE_PATH = CONFIGS_DIR / "config_structure.yaml"
 CONFIG_PATH = CONFIGS_DIR / "config.yaml"
@@ -35,6 +36,8 @@ def copy_template_config(config_destination: Path = CONFIG_PATH) -> None:
             defaults[name] = ""
         elif ptype in ("int", "float"):
             defaults[name] = None
+        elif ptype == "bool":
+            defaults[name] = False
         else:
             defaults[name] = None
 
@@ -125,13 +128,17 @@ def parameter_type_validation(parameter: dict, config: dict) -> bool:
     # Parameter type checking
     match param_type:
         case 'string':
-            class_type = str  
+            class_type = str
         case 'int':
             class_type = int
-        case 'float':            
+        case 'float':
             class_type = float
+        case 'bool':
+            class_type = bool
         case _:
-            raise TypeError(f"Error: no type definition in parameter structure for parameter {param_name}")
+            raise TypeError(
+                f"Error: no type definition in parameter structure for parameter {param_name}"
+            )
     
     assert isinstance(config[param_name], class_type), (
         f"Error: parameter {param_name} is not of type {class_type} in config file."
@@ -232,7 +239,7 @@ def discover_port() -> str:
         )
 
 
-def get_config(config_path: Path = CONFIG_PATH) -> dict:
+def get_config(config_path: Path = CONFIG_PATH, overrides: dict | None = None) -> dict:
     """
     Load and validate the config, creating/repairing it as needed using the configured structure.
     Also discovers and persists the device port when missing.
@@ -253,6 +260,12 @@ def get_config(config_path: Path = CONFIG_PATH) -> dict:
         cfg = repair_config_file(issues, cfg)
         save_config_file(cfg, config_path)
 
+    # Apply runtime overrides (if provided)
+    if overrides:
+        for k, v in overrides.items():
+            if v is not None:
+                cfg[k] = v
+
     # Ensure required fields are populated or handled
     # device_port: if empty, discover it and persist
     if cfg.get("device_port") in (None, ""):
@@ -266,6 +279,38 @@ def get_config(config_path: Path = CONFIG_PATH) -> dict:
             print(f"Port discovery failed: {e}. Skipping device connection.")
     else:
         print(f"Using port {cfg['device_port']} from config.yaml.")
+
+    # calibration_file existence enforcement
+    calib_file = cfg.get("calibration_file")
+    if calib_file in (None, ""):
+        # Already handled as empty via schema; attempt repair to default was run earlier
+        pass
+    else:
+        path = CALIBRATION_DIR / str(calib_file)
+        if not path.exists():
+            # Try default from structure
+            tmpl = load_config_structure()
+            default_name = None
+            for p in tmpl.get("parameters", []):
+                if p.get("name") == "calibration_file":
+                    default_name = p.get("default")
+                    break
+            if default_name:
+                default_path = CALIBRATION_DIR / str(default_name)
+                if default_path.exists():
+                    print(
+                        f"Calibration file '{path.name}' not found. Falling back to default '{default_name}'."
+                    )
+                    cfg["calibration_file"] = default_name
+                    save_config_file(cfg, config_path)
+                else:
+                    raise FileNotFoundError(
+                        f"Calibration file not found: {path}. Default '{default_name}' also missing at {default_path}."
+                    )
+            else:
+                raise FileNotFoundError(
+                    f"Calibration file not found: {path} and no default specified in structure."
+                )
 
     return cfg
 

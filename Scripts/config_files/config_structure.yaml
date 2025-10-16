@@ -4,3 +4,23 @@ parameters:
     nullable: true
     default: ""
     pattern: ".+"  # non-empty when provided
+  - name: torque
+    type: bool
+    nullable: false
+    default: true
+  - name: calibration_file
+    type: string
+    nullable: false
+    default: "robot.json"
+    pattern: ".+\\.json$"
+  - name: default_speed
+    type: float
+    nullable: false
+    default: 0.5
+    min: 0.0
+    max: 1.0
+  - name: connect_timeout
+    type: float
+    nullable: false
+    default: 10.0
+    min: 0.0
