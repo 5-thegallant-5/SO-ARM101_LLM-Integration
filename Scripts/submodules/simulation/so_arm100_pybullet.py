@@ -114,7 +114,7 @@ class SOARM100Sim:
                 cameraDistance=1.06,
                 cameraYaw=75.60,
                 cameraPitch=-35.80,
-                cameraTargetPosition=[0.0, 0.0, 0.10],
+                cameraTargetPosition=[-0.36, 0.0, -0.18],
             )
         except Exception:
             pass
