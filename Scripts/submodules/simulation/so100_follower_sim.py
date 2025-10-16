@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
 
-from .so_arm100_pybullet import SOARM100Sim
+from so_arm100_pybullet import SOARM100Sim
 
 
 def _deg_to_rad(v: float) -> float:

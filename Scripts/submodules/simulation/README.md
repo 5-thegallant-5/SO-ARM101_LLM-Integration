@@ -8,6 +8,7 @@ Overview
 Files
 - `so_arm100_pybullet.py`: main simulator/controller script.
 - `SimulationModels/SO100/so100.urdf`: robot model and meshes.
+ - `web_interface_sim.py`: launches the existing Flask WebInterface wired to the simulator.
 
 Requirements
 - Python 3.9+
@@ -21,6 +22,13 @@ Quick Start
   - `python submodules/simulation/so_arm100_pybullet.py --gui --mode demo`
 - Headless demo:
   - `python submodules/simulation/so_arm100_pybullet.py --direct --mode demo`
+
+Web Interface (sliders)
+- Launch the Flask app backed by the simulator:
+  - `python submodules/simulation/web_interface_sim.py`
+- Open `http://127.0.0.1:5000` in your browser.
+- Move sliders to send joint targets (degrees) to the sim.
+- Tip: set `SO100_SIM_GUI=0` to run the sim headless.
 
 Options
 - `--realtime`: enable real‑time stepping.
@@ -120,4 +128,3 @@ Notes and limitations
 - The serial bridge requires implementing the same byte‑level protocol used by the real controller. If that protocol isn’t documented, prefer the driver shim.
 - For deterministic testing, disable real‑time (`--realtime` off) and use a fixed timestep.
 - The provided simulator uses position control; extend with torque/velocity control as needed.
-
