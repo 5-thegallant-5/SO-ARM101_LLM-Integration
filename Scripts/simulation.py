@@ -180,7 +180,7 @@ def find_port():
 
 if __name__ == "__main__":
     # Load config file
-    get_config()
+    # get_config()
     
     # Set robot config
     robot, r_config = setup_robot(torque=False)

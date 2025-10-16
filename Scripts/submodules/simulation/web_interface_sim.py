@@ -19,7 +19,10 @@ import threading
 import time
 from typing import Dict
 
-from so100_follower_sim import SO100FollowerConfig, SO100Follower
+if os.getcwd().endswith("simulation"):
+    from so100_follower_sim import SO100FollowerConfig, SO100Follower
+else:
+    from .so100_follower_sim import SO100FollowerConfig, SO100Follower
 
 
 def _load_web_interface_create_app():
