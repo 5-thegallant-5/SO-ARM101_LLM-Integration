@@ -56,6 +56,16 @@ class SO100Follower:
         self.sim: Optional[SOARM100Sim] = None
         self.bus = _BusStub()
         self.connected = False
+        # Per-joint zero offset (radians) so that UI 0 == middle of motion
+        self._zero_offset_rad: Dict[str, float] = {}
+        # Joints to calibrate with 0 at middle (exclude gripper)
+        self._arm_joints = {
+            "shoulder_pan",
+            "shoulder_lift",
+            "elbow_flex",
+            "wrist_flex",
+            "wrist_roll",
+        }
 
     def connect(self) -> None:
         # If the real code decides GUI based on port or env, honor an override
@@ -71,6 +81,24 @@ class SO100Follower:
             use_fixed_base=True,
         )
         self.sim.reset_pose()
+        # Build zero offsets at joint midpoints so that 0 deg == middle
+        self._zero_offset_rad.clear()
+        for name in self.sim.joint_names():
+            try:
+                lower, upper = self.sim.get_joint_limits(name)
+            except Exception:
+                lower, upper = (-3.14159, 3.14159)
+            mid = 0.5 * (lower + upper)
+            self._zero_offset_rad[name] = mid
+
+        # Reset sim to middle positions for a neutral start
+        try:
+            self.sim.set_positions({n: off for n, off in self._zero_offset_rad.items()})
+            # Step a few frames to settle
+            for _ in range(5):
+                self.sim.step(sleep=True)
+        except Exception:
+            pass
         self.connected = True
 
     def disconnect(self) -> None:
@@ -89,6 +117,9 @@ class SO100Follower:
                 rad = self.sim.get_joint_state(name)
             except Exception:
                 rad = 0.0
+            # Report degrees relative to middle for arm joints, absolute for gripper
+            if name in self._arm_joints:
+                rad -= self._zero_offset_rad.get(name, 0.0)
             obs[f"{name}.pos"] = _rad_to_deg(rad)
         return obs
 
@@ -105,7 +136,12 @@ class SO100Follower:
             name = key[:-4]  # strip '.pos'
             if name not in self.sim.joint_name_to_index:
                 continue
-            rad = _deg_to_rad(float(deg_val))
+            # For arm joints, interpret values as relative to the middle (0 at midpoint)
+            # For other joints (e.g., gripper), interpret as absolute degrees
+            if name in self._arm_joints:
+                rad = self._zero_offset_rad.get(name, 0.0) + _deg_to_rad(float(deg_val))
+            else:
+                rad = _deg_to_rad(float(deg_val))
             try:
                 lower, upper = self.sim.get_joint_limits(name)
             except Exception:
@@ -117,4 +153,3 @@ class SO100Follower:
             self.sim.set_positions(targets_rad)
             # Step once to apply; callers can manage pacing if needed
             self.sim.step(sleep=True)
-

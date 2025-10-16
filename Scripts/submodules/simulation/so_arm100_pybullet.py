@@ -66,6 +66,7 @@ class SOARM100Sim:
         time_step: float = 1.0 / 240.0,
         use_plane: bool = True,
         use_fixed_base: bool = True,
+        minimal_gui: bool = True,
     ) -> None:
         self.client = p.connect(p.GUI if gui else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -76,6 +77,20 @@ class SOARM100Sim:
         self.time_step = time_step
         p.setTimeStep(self.time_step)
         p.setRealTimeSimulation(1 if real_time else 0)
+
+        # Reduce GUI rendering load if requested
+        if gui and minimal_gui:
+            try:
+                p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
+                p.configureDebugVisualizer(p.COV_ENABLE_WIREFRAME, 0)
+                # Temporarily disable rendering while loading assets
+                p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+            except Exception:
+                pass
 
         # Optionally add a plane
         if use_plane:
@@ -90,6 +105,25 @@ class SOARM100Sim:
             useFixedBase=use_fixed_base,
             flags=p.URDF_USE_INERTIA_FROM_FILE | p.URDF_MAINTAIN_LINK_ORDER,
         )
+
+        # Set a default debug visualizer camera if GUI is enabled
+        try:
+            # Requested settings: dist=1.06, pitch=-35.80, yaw=75.60
+            # API: resetDebugVisualizerCamera(distance, yaw, pitch, targetPosition)
+            p.resetDebugVisualizerCamera(
+                cameraDistance=1.06,
+                cameraYaw=75.60,
+                cameraPitch=-35.80,
+                cameraTargetPosition=[0.0, 0.0, 0.10],
+            )
+        except Exception:
+            pass
+
+        # Re-enable rendering after setup
+        try:
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
+        except Exception:
+            pass
 
         # Build joint name -> index map for convenience
         self.joint_name_to_index: Dict[str, int] = {}
