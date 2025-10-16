@@ -1,17 +1,13 @@
-import lerobot.find_port as fp
 import time
-import os
-import yaml
 from pathlib import Path
 from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
+from submodules.config_module.config_handler import get_config
 
 
-CONFIG_VARS = {
-    "device_port": ""
-}
+CONFIG = {}
 
 
-def main():
+def main(robot: SO100Follower):
     # pos = robot.get_observation()
     # app = start_web_interface(send_action_callback, pos)
     # app.run()
@@ -69,53 +65,6 @@ def robot_rest(robot: SO100Follower):
     time.sleep(3)
 
 
-def get_config():
-    """
-    Config handler:
-        - Checks if there is an existing config file
-        - Creates a config file if none exists
-        - Attempts to load file
-        - If port does not exist in file, automatically scans and retrieves the port
-        - Sets global var device_port to the correct port, before saving into file
-    """
-    global CONFIG_VARS
-    
-    print("Loading config")    
-    
-    # Check for config file
-    if not os.path.exists("./config_files/config.yaml"):
-        print("No config.yaml file found - creating new file.")
-        with open("./config_files/config.yaml", mode="w") as file:
-            yaml.safe_dump(CONFIG_VARS, file)
-            file.close()
-    
-    # Try to load config file
-    try:
-        with open("./config_files/config.yaml", mode="r+") as file:
-            config = yaml.safe_load(file)
-            
-            # Case where device port is an empty string in the YAML file:
-            if config["device_port"] == "":
-                print("Parameter 'device_port' is empty in 'config.yaml'. Starting port configuration...")
-                CONFIG_VARS["device_port"] = find_port()
-                
-                # Save the result into the file
-                file.seek(0)
-                yaml.safe_dump(CONFIG_VARS, file)
-                
-            
-            # Case where device port is in the YAML file: 
-            else:
-                CONFIG_VARS["device_port"] = config["device_port"]
-                print(f"Using port {CONFIG_VARS['device_port']} from config.yaml.")
-
-            # Close config.yaml
-            file.close()
-                
-    except Exception as e:
-        print("ERROR:", e)
-
-
 
 def setup_robot(torque: bool  = True):
     """
@@ -123,11 +72,13 @@ def setup_robot(torque: bool  = True):
     """
     
     # Set robot config
+    # Resolve calibration directory relative to this file (Scripts)
+    scripts_dir = Path(__file__).resolve().parent
     robot_config = SO100FollowerConfig(
-        # Get port from config variables
-        port=CONFIG_VARS['device_port'],
+        # Get port from config file
+        port=CONFIG['device_port'],
         id="robot",
-        calibration_dir=Path("./config_files/arm_calibration/"),
+        calibration_dir=scripts_dir / "config_files/arm_calibration/",
     )
     
     robot = SO100Follower(robot_config)
@@ -142,53 +93,25 @@ def setup_robot(torque: bool  = True):
 
 
 
-def find_port():
-    """
-    Find USB port of robot and set global device_port variable.
-    Modified from find_port.py from LeRobot library
-    """
-    
-    print("\nPlease ensure the robot is connected via USB cable. Once done, press Enter.")
-    input()
-    print("Finding all available ports for the MotorsBus.")
-    ports_before = fp.find_available_ports()
-    print("Ports registered. Remove the USB cable from your MotorsBus and press Enter when done.")
-    input()  # Wait for user to disconnect the device
-
-    time.sleep(0.5)  # Allow some time for port to be released
-    ports_after = fp.find_available_ports()
-    ports_diff = list(set(ports_before) - set(ports_after))
-
-    if len(ports_diff) == 1:
-        port = ports_diff[0]
-        print(f"The port of this MotorsBus is '{port}'")
-        print("Reconnect the USB cable and press Enter.")
-        input() # Wait for the user to reconnect the device
-        return port
-    elif len(ports_diff) == 0:
-        raise OSError(
-            f"Could not detect the port. No difference was found ({ports_diff})."
-        )
-    else:
-        raise OSError(
-            f"Could not detect the port. More than one port was found ({ports_diff})."
-        )
-
-
 
 
 if __name__ == "__main__":
-    # Load config file
-    get_config()
-    
-    # Set robot config
+    # Load config via centralized handler
+    CONFIG = get_config()
+
+    # If no device port is configured or discovery failed, skip connection cleanly
+    if not CONFIG.get("device_port"):
+        print("No device port configured. Skipping robot connection and exiting.")
+        raise SystemExit(0)
+
+    # Set robot config and connect
     robot, r_config = setup_robot(torque=False)
 
-    # Run main script    
-    main()
+    # Run main script
+    main(robot)
 
     # Set to rest position
     robot_rest(robot)
-    
+
     # Disconnect from arm
     robot.disconnect()

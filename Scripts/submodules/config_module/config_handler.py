@@ -1,22 +1,46 @@
+import time
 import yaml
 from pathlib import Path
+import lerobot.find_port as fp
 
-BASE_PATH = "./config_files/"
+# Resolve paths relative to the Scripts directory
+SCRIPTS_DIR = Path(__file__).resolve().parents[2]
+CONFIGS_DIR = SCRIPTS_DIR / "config_files"
 
-CONFIG_STRUCTURE_PATH = Path(BASE_PATH + "config_structure.yaml")
-CONFIG_PATH = Path(BASE_PATH + "config.yaml")
+CONFIG_STRUCTURE_PATH = CONFIGS_DIR / "config_structure.yaml"
+CONFIG_PATH = CONFIGS_DIR / "config.yaml"
 
 
 def copy_template_config(config_destination: Path = CONFIG_PATH) -> None:
     """
-    TODO Implement function.
+    Initializes a new config file based on the config structure schema.
 
-    TODO Is this needed?
-
-    Copies the template config file to the specified location.
+    For each parameter defined in the structure, create a default value:
+    - string: empty string
+    - int/float: null (None)
+    - if nullable is true: keep the empty/null default
     """
+    structure = load_config_structure()
+    defaults: dict[str, object] = {}
+    for param_def in structure.get("parameters", []):
+        name = param_def.get("name")
+        ptype = param_def.get("type")
+        if not name or not ptype:
+            continue
+        if "default" in param_def:
+            defaults[name] = param_def["default"]
+            continue
+        # Fall back to type-based default
+        if ptype == "string":
+            defaults[name] = ""
+        elif ptype in ("int", "float"):
+            defaults[name] = None
+        else:
+            defaults[name] = None
 
-    pass
+    config_destination.parent.mkdir(parents=True, exist_ok=True)
+    with config_destination.open("w") as f:
+        yaml.safe_dump(defaults, f)
 
 
 def config_file_exists(config_file: Path = CONFIG_PATH) -> bool:
@@ -31,19 +55,46 @@ def config_file_exists(config_file: Path = CONFIG_PATH) -> bool:
 
 
 def verify_config_file_schema(
-    config: Path | dict = CONFIG_PATH, template: Path | dict = CONFIG_STRUCTURE_PATH
-) -> tuple:
+    config: dict, template: dict | None = None
+) -> tuple[bool, list[str]]:
     """
-    TODO Implement function.
-
-    Compares structure of config file to template. Returns tuple:
-        - Arg0: Successfully verified file? (bool)
-        - Arg 1: List of missing or faulty fields.
+    Compares structure of config dict to template dict. Returns (ok, issues).
+    Only validates presence and basic type conformance for non-empty values.
     """
-    pass
+    if template is None:
+        template = load_config_structure()
+
+    issues: list[str] = []
+    for param_def in template.get("parameters", []):
+        name = param_def.get("name")
+        if not name:
+            continue
+        # Required unless explicitly nullable and empty
+        present = name in config
+        if not present:
+            issues.append(f"missing:{name}")
+            continue
+        value = config.get(name)
+        # Allow empty if nullable True
+        if (value in (None, "")) and param_def.get("nullable", False):
+            continue
+        if value in (None, "") and not param_def.get("nullable", False):
+            issues.append(f"empty:{name}")
+            continue
+        try:
+            parameter_type_validation(param_def, config)
+        except (AssertionError, TypeError) as e:
+            issues.append(f"type:{name}:{e}")
+            continue
+        # Constraints check for non-empty values
+        try:
+            validate_constraints(param_def, value)
+        except AssertionError as e:
+            issues.append(f"constraint:{name}:{e}")
+    return (len(issues) == 0, issues)
 
 
-def verify_parameter(parameter: dict, config: Path | dict = CONFIG_PATH) -> bool:
+def verify_parameter(parameter: dict, config: dict) -> bool:
     """
     TODO Implement function.
 
@@ -52,22 +103,24 @@ def verify_parameter(parameter: dict, config: Path | dict = CONFIG_PATH) -> bool
 
     # 1. === Type validation ===
     try:
-        parameter_type_validation(parameter, config) # Will continue if types match
-    except AssertionError: # If the type assertion failed:
-       return False
+        parameter_type_validation(parameter, config)  # Will continue if types match
+    except (AssertionError, TypeError):  # If the type assertion failed:
+        return False
     
     # 2. === Nullable field validation ===
 
     # 3. === Constraint checking ===
 
 
-def parameter_type_validation(parameter: dict, config: Path | dict = CONFIG_PATH) -> bool:
+def parameter_type_validation(parameter: dict, config: dict) -> bool:
     """
     Validates the type of the parameter in config against the config definition.
     """
     # Get the name of the parameter from the definition
-    param_name = parameter['name']
-    param_type = parameter['type']
+    param_name = parameter.get('name')
+    param_type = parameter.get('type')
+    if not param_name or not param_type:
+        raise TypeError("Invalid parameter definition: missing name or type")
     
     # Parameter type checking
     match param_type:
@@ -80,24 +133,46 @@ def parameter_type_validation(parameter: dict, config: Path | dict = CONFIG_PATH
         case _:
             raise TypeError(f"Error: no type definition in parameter structure for parameter {param_name}")
     
-    assert isinstance(config[param_name], class_type), f"Error: parameter {param_name} is not of type {class_type} in config file."
+    assert isinstance(config[param_name], class_type), (
+        f"Error: parameter {param_name} is not of type {class_type} in config file."
+    )
     
     # If no error is raised:
     return True
 
 
 def repair_config_file(
-    broken_params: list,
-    config: Path | dict = CONFIG_PATH,
-    template: Path | dict = CONFIG_STRUCTURE_PATH,
-) -> None:
+    broken_params: list[str],
+    config: dict,
+    template: dict | None = None,
+) -> dict:
     """
-    TODO Implement function.
-
-    Repairs any broken parameters from the config file, based on the template file.
+    Repairs any broken or missing parameters in the config dict, using the template.
+    Returns the updated config dict.
     """
+    if template is None:
+        template = load_config_structure()
 
-    pass
+    defs_by_name = {d.get("name"): d for d in template.get("parameters", []) if d.get("name")}
+    for issue in broken_params:
+        kind, _, rest = issue.partition(":")
+        name, *_ = rest.split(":", 1)
+        d = defs_by_name.get(name)
+        if not d:
+            continue
+        # Use explicit default if present
+        if "default" in d:
+            config[name] = d["default"]
+            continue
+        # Reset to type-based default
+        ptype = d.get("type")
+        if ptype == "string":
+            config[name] = ""
+        elif ptype in ("int", "float"):
+            config[name] = None
+        else:
+            config[name] = None
+    return config
 
 
 def load_config_file(config: Path = CONFIG_PATH) -> dict:
@@ -105,55 +180,120 @@ def load_config_file(config: Path = CONFIG_PATH) -> dict:
     Opens a specified config file as a dictionary.
     """
     
-    file = config.open()
-    config_dict = yaml.safe_load(file)
-
+    with config.open() as file:
+        config_dict = yaml.safe_load(file) or {}
     return config_dict
 
 
-def get_config(file_location: Path):
+def save_config_file(config_dict: dict, config_path: Path = CONFIG_PATH) -> None:
     """
-    TODO Recreate this function with the above functions to make more modular.
+    Writes the config dict to disk at the given path.
+    """
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w") as f:
+        yaml.safe_dump(config_dict, f)
 
-    Config handler:
-        - Checks if there is an existing config file
-        - Creates a config file if none exists
-        - Attempts to load file
-        - If port does not exist in file, automatically scans and retrieves the port
-        - Sets global var device_port to the correct port, before saving into file
+
+def load_config_structure(structure_path: Path = CONFIG_STRUCTURE_PATH) -> dict:
+    """
+    Load the config structure YAML.
+    """
+    with structure_path.open() as f:
+        return yaml.safe_load(f) or {}
+
+
+def discover_port() -> str:
+    """
+    Discover the USB port for the MotorsBus by diffing connected ports.
+    Interacts with the user to unplug/replug the device.
+    """
+    print("\nPlease ensure the robot is connected via USB cable. Once done, press Enter.")
+    input()
+    print("Finding all available ports for the MotorsBus.")
+    ports_before = fp.find_available_ports()
+    print("Ports registered. Remove the USB cable from your MotorsBus and press Enter when done.")
+    input()
+    time.sleep(0.5)
+    ports_after = fp.find_available_ports()
+    ports_diff = list(set(ports_before) - set(ports_after))
+    if len(ports_diff) == 1:
+        port = ports_diff[0]
+        print(f"The port of this MotorsBus is '{port}'")
+        print("Reconnect the USB cable and press Enter.")
+        input()
+        return port
+    elif len(ports_diff) == 0:
+        raise OSError(
+            f"Could not detect the port. No difference was found ({ports_diff})."
+        )
+    else:
+        raise OSError(
+            f"Could not detect the port. More than one port was found ({ports_diff})."
+        )
+
+
+def get_config(config_path: Path = CONFIG_PATH) -> dict:
+    """
+    Load and validate the config, creating/repairing it as needed using the configured structure.
+    Also discovers and persists the device port when missing.
     """
     print("Loading config")
 
-    # # Check for config file
-    # if not os.path.exists("./config_files/config.yaml"):
-    #     print("No config.yaml file found - creating new file.")
-    #     with open("./config_files/config.yaml", mode="w") as file:
-    #         yaml.safe_dump(CONFIG_VARS, file)
-    #         file.close()
+    # Ensure a config file exists
+    if not config_file_exists(config_path):
+        print("No config.yaml file found - creating new file.")
+        copy_template_config(config_path)
 
-    # # Try to load config file
-    # try:
-    #     with open("./config_files/config.yaml", mode="r+") as file:
-    #         config = yaml.safe_load(file)
+    # Load the current config
+    cfg = load_config_file(config_path)
 
-    #         # Case where device port is an empty string in the YAML file:
-    #         if config["device_port"] == "":
-    #             print(
-    #                 "Parameter 'device_port' is empty in 'config.yaml'. Starting port configuration..."
-    #             )
-    #             CONFIG_VARS["device_port"] = find_port()
+    # Validate and repair basic schema issues
+    ok, issues = verify_config_file_schema(cfg)
+    if not ok:
+        cfg = repair_config_file(issues, cfg)
+        save_config_file(cfg, config_path)
 
-    #             # Save the result into the file
-    #             file.seek(0)
-    #             yaml.safe_dump(CONFIG_VARS, file)
+    # Ensure required fields are populated or handled
+    # device_port: if empty, discover it and persist
+    if cfg.get("device_port") in (None, ""):
+        print("Parameter 'device_port' is empty in 'config.yaml'. Starting port configuration...")
+        try:
+            cfg["device_port"] = discover_port()
+            save_config_file(cfg, config_path)
+            print(f"Device port set to {cfg['device_port']}")
+        except Exception as e:
+            # Gracefully allow running without a device port
+            print(f"Port discovery failed: {e}. Skipping device connection.")
+    else:
+        print(f"Using port {cfg['device_port']} from config.yaml.")
 
-    #         # Case where device port is in the YAML file:
-    #         else:
-    #             CONFIG_VARS["device_port"] = config["device_port"]
-    #             print(f"Using port {CONFIG_VARS['device_port']} from config.yaml.")
+    return cfg
 
-    #         # Close config.yaml
-    #         file.close()
 
-    # except Exception as e:
-    #     print("ERROR:", e)
+def validate_constraints(parameter: dict, value: object) -> None:
+    """
+    Validate constraints defined in the parameter schema against the value.
+    Supported:
+    - For strings: 'pattern' (regex), 'enum' (list of allowed)
+    - For int/float: 'min', 'max' (inclusive)
+    """
+    ptype = parameter.get("type")
+    if value in (None, ""):
+        return
+    if ptype == "string":
+        import re
+        enum = parameter.get("enum")
+        if enum is not None:
+            assert value in enum, f"value '{value}' not in enum {enum}"
+        pattern = parameter.get("pattern")
+        if pattern:
+            assert re.fullmatch(pattern, str(value)) is not None, (
+                f"value '{value}' does not match pattern {pattern}"
+            )
+    elif ptype in ("int", "float"):
+        min_v = parameter.get("min")
+        max_v = parameter.get("max")
+        if min_v is not None:
+            assert value >= min_v, f"value {value} < min {min_v}"
+        if max_v is not None:
+            assert value <= max_v, f"value {value} > max {max_v}"

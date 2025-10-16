@@ -1,5 +1,6 @@
 parameters:
-  - device_port:
-    name: device_port
+  - name: device_port
     type: string
     nullable: true
+    default: ""
+    pattern: ".+"  # non-empty when provided
