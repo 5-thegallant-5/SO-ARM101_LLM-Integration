@@ -3,7 +3,8 @@ import time
 import os
 import yaml
 from pathlib import Path
-from lerobot.robots.so100_follower import SO100FollowerConfig, SO100Follower
+from submodules.simulation.so100_follower_sim import SO100Follower, SO100FollowerConfig
+from submodules.WebInterface.interface import create_app
 
 
 CONFIG_VARS = {
