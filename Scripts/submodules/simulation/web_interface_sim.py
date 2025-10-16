@@ -55,10 +55,27 @@ def main() -> None:
     stop_evt = threading.Event()
     action_lock = threading.Lock()
     latest_action: Dict[str, float] = robot.get_observation().copy()
-    last_applied: Dict[str, float] | None = None
+    applied_action: Dict[str, float] = dict(latest_action)
 
     def _step_loop():
-        nonlocal last_applied
+        nonlocal applied_action
+        # Configurable max joint speed in deg/s (defaults to 120)
+        try:
+            max_deg_per_s = float(os.getenv("SO100_SIM_MAX_SPEED_DEG_S", "120"))
+        except Exception:
+            max_deg_per_s = 120.0
+        # Determine physics timestep (fallback to 1/240s)
+        try:
+            dt = float(getattr(getattr(robot, "sim", None), "time_step", 1.0 / 240.0))
+        except Exception:
+            dt = 1.0 / 240.0
+        max_deg_per_step = max(0.0, max_deg_per_s * dt)
+
+        def _rate_limit(curr: float, target: float, max_step: float) -> float:
+            delta = target - curr
+            if abs(delta) <= max_step:
+                return target
+            return curr + max_step * (1.0 if delta > 0 else -1.0)
         while not stop_evt.is_set():
             try:
                 if robot.sim is None:
@@ -67,15 +84,20 @@ def main() -> None:
 
                 # Snapshot latest desired action
                 with action_lock:
-                    pending = dict(latest_action)
+                    desired = dict(latest_action)
 
-                if last_applied is None or pending != last_applied:
-                    # Apply new targets (send_action also advances one step)
-                    robot.send_action(pending)
-                    last_applied = pending
-                else:
-                    # No change; advance physics
-                    robot.sim.step(sleep=True)
+                # Rate-limit toward desired for smooth motion
+                next_action: Dict[str, float] = dict(applied_action)
+                for key in set(list(applied_action.keys()) + list(desired.keys())):
+                    if not key.endswith(".pos"):
+                        continue
+                    curr = applied_action.get(key, 0.0)
+                    tgt = desired.get(key, curr)
+                    next_action[key] = _rate_limit(curr, tgt, max_deg_per_step)
+
+                applied_action = next_action
+                # Apply and advance one physics step via send_action
+                robot.send_action(applied_action)
             except Exception:
                 # Keep stepping even if occasional errors occur
                 time.sleep(1.0 / 240.0)

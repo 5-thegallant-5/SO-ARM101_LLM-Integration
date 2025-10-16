@@ -59,23 +59,52 @@ def main() -> None:
     # Shared state for interactive updates
     action_lock = threading.Lock()
     latest_action: Dict[str, float] = robot.get_observation().copy()
-    last_applied: Dict[str, float] | None = None
+    # What we actually apply to the simulator each step (starts at current obs)
+    applied_action: Dict[str, float] = dict(latest_action)
     stop_evt = threading.Event()
 
     def step_loop():
-        nonlocal last_applied
+        nonlocal applied_action
+        # Configurable max joint speed in deg/s; defaults to a reasonable rate
+        try:
+            max_deg_per_s = float(os.getenv("SO100_SIM_MAX_SPEED_DEG_S", "120"))
+        except Exception:
+            max_deg_per_s = 120.0
+        # Determine physics timestep (fallback to 1/240s)
+        try:
+            dt = float(getattr(getattr(robot, "sim", None), "time_step", 1.0 / 240.0))
+        except Exception:
+            dt = 1.0 / 240.0
+        max_deg_per_step = max(0.0, max_deg_per_s * dt)
+
+        def _rate_limit(curr: float, target: float, max_step: float) -> float:
+            delta = target - curr
+            if abs(delta) <= max_step:
+                return target
+            return curr + max_step * (1.0 if delta > 0 else -1.0)
+
         while not stop_evt.is_set():
             try:
                 if robot.sim is None:
                     time.sleep(1.0 / 240.0)
                     continue
+                # Snapshot desired targets
                 with action_lock:
-                    pending = dict(latest_action)
-                if last_applied is None or pending != last_applied:
-                    robot.send_action(pending)  # applies and steps once
-                    last_applied = pending
-                else:
-                    robot.sim.step(sleep=True)
+                    desired = dict(latest_action)
+
+                # Build next applied action by rate-limiting toward desired
+                next_action: Dict[str, float] = dict(applied_action)
+                # Ensure we consider all keys present in either map
+                for key in set(list(applied_action.keys()) + list(desired.keys())):
+                    if not key.endswith(".pos"):
+                        continue
+                    curr = applied_action.get(key, 0.0)
+                    tgt = desired.get(key, curr)
+                    next_action[key] = _rate_limit(curr, tgt, max_deg_per_step)
+
+                applied_action = next_action
+                # Apply and advance physics exactly once per loop
+                robot.send_action(applied_action)
             except Exception:
                 time.sleep(1.0 / 240.0)
 
