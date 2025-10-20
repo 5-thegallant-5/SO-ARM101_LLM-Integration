@@ -17,7 +17,8 @@ CONFIG = {}
 
 def main(robot: SO100Follower):
     print(robot.get_observation())
-
+    input()
+    
     # Determine angles for the robot to assume
     action = {
         "shoulder_pan.pos": 0,
