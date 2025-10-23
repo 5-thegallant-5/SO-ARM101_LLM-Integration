@@ -15,12 +15,30 @@ from __future__ import annotations
 
 import os
 import sys
+import pathlib
 from typing import Dict
 
-if os.getcwd().endswith("simulation"):
-    from so100_follower_sim import SO100FollowerConfig, SO100Follower
-else:
-    from .so100_follower_sim import SO100FollowerConfig, SO100Follower
+# Ensure the Scripts folder is used as the base directory for imports and paths.
+# This makes the script resilient regardless of the current working directory.
+_here = pathlib.Path(__file__).resolve()
+_scripts_dir = None
+for p in _here.parents:
+    if p.name == "Scripts":
+        _scripts_dir = p
+        break
+if _scripts_dir is None:
+    # Fallback if running from an unexpected location; assume three levels up
+    # .../Scripts/submodules/simulation/web_interface_sim.py
+    _scripts_dir = _here.parent.parent.parent
+
+# Add Scripts to sys.path so we can import via `submodules...`
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+
+from submodules.simulation.so100_follower_sim import (  # type: ignore
+    SO100FollowerConfig,
+    SO100Follower,
+)
 
 
 def _load_web_interface_create_app():
@@ -30,11 +48,11 @@ def _load_web_interface_create_app():
     so we temporarily add its directory to sys.path and import `interface`.
     """
     import importlib
-    import pathlib
 
-    here = pathlib.Path(__file__).resolve()
-    web_dir = here.parent.parent / "WebInterface"
-    sys.path.insert(0, str(web_dir))
+    # WebInterface lives under Scripts/submodules/WebInterface
+    web_dir = _scripts_dir / "submodules" / "WebInterface"
+    if str(web_dir) not in sys.path:
+        sys.path.insert(0, str(web_dir))
     try:
         interface = importlib.import_module("interface")
         return interface.create_app
