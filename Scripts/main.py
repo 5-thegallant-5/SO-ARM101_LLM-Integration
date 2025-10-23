@@ -31,7 +31,6 @@ def main(robot: SO100Follower):
 
     # Set robot to the zero position (ramped or direct)
     robot.send_action(action)
-    input() # Wait
 
     # Get current position
     print(robot.get_observation())
@@ -175,8 +174,8 @@ def run_controller(args: argparse.Namespace) -> int:
     robot, _ = setup_robot(torque=CONFIG.get('torque', True), use_sim=bool(args.sim))
     try:
         main(robot)
-        robot_rest(robot)
     finally:
+        robot_rest(robot)
         robot.disconnect()
     return 0
 
