@@ -20,10 +20,11 @@ def send_action_callback(positions):
 
 if __name__ == "__main__":
     # Load config file
-    get_config()
+    CONFIG = get_config()
+    print(CONFIG)
     
     # Set robot config
-    robot, r_config = setup_robot()
+    robot, r_config = setup_robot(config=CONFIG)
 
     # Run main script
     try:

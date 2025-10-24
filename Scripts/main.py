@@ -88,14 +88,14 @@ def _select_backend(use_sim: bool) -> Tuple[Type[Any], Type[Any]]:
     return SO100FollowerConfig, SO100Follower
 
 
-def setup_robot(torque: bool  = True, use_sim: bool = False):
+def setup_robot(torque: bool  = True, use_sim: bool = False, config=CONFIG):
     """
     Create connection to the SO-ARM100
     """
     SO100FollowerConfig, SO100Follower = _select_backend(use_sim)
 
     # For simulation, the port value is ignored by the shim but required by the dataclass
-    port = "SIM" if use_sim else CONFIG["device_port"]
+    port = "SIM" if use_sim else config["device_port"]
 
     # Optional GUI override for simulation via env var SO100_SIM_GUI ("0" to disable)
     sim_gui = not (os.getenv("SO100_SIM_GUI") in {"0", "false", "False"})
