@@ -1,12 +1,17 @@
 from main import *
 from submodules.WebInterface.interface import create_app
+from submodules.WebInterface.routes import *
+
 
 
 def main():
     pos = robot.get_observation()
     app = start_web_interface(send_action_callback, pos)
-    app.run()
-    input() # Wait
+    try:
+        app.run()
+    finally:
+        robot_rest(robot)
+        robot.disconnect()
 
 
 def start_web_interface(onUpdate, current_pos):
@@ -27,12 +32,4 @@ if __name__ == "__main__":
     robot, r_config = setup_robot(config=CONFIG)
 
     # Run main script
-    try:
-        main()
-    finally:
-        # Set to rest position
-        robot_rest(robot)
-        
-        # Disconnect from arm
-        robot.disconnect()
-    
+    main()

@@ -170,14 +170,16 @@ available_functions = {
 }
 
 #the system prompt sent to the LLM
-sys_prompt = """ You are in control of a robotic arm. This robotic arm has 7 positions.
+sys_prompt = """ You are in control of a robotic arm. This robotic arm has 8 positions.
 Position 1: the Rest position
 Position 2: the Control position
 Position 3: the Up position
 Position 4: the Forward position
 Position 5: the Left position
 Position 6: the Right position
-Position 7: the Open Gripper position"""
+Position 7: the Open Gripper position
+Position 8: the Closed Gripper position
+"""
 
 #the user input of the LLM's first task
 user_input = str(input("User: "))
