@@ -25,12 +25,13 @@ if __name__ == "__main__":
     # Set robot config
     robot, r_config = setup_robot()
 
-    # Run main script    
-    main()
-
-    # Set to rest position
-    robot_rest(robot)
-    
-    # Disconnect from arm
-    robot.disconnect()
+    # Run main script
+    try:
+        main()
+    finally:
+        # Set to rest position
+        robot_rest(robot)
+        
+        # Disconnect from arm
+        robot.disconnect()
     
